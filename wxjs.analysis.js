@@ -52,7 +52,7 @@
      * 
      * @param {object} message 
      * @param {string} message.__msg_type 消息类型：callback、event
-     * @param {string} [message.__callback_id] callback_id
+     * @param {string} [message.__callback_id]
      * @param {string} [message.__event_id] 事件名称
      * @param {object} message.__params   参数
      * @param {object} [message.__params.fullApiName]
@@ -196,8 +196,8 @@
             func: func,
             params: params
         };
-        f[_MESSAGE_TYPE] = 'call';
-        f[_CALLBACK_ID] = callbackid;
+        f['__msg_type'] = 'call';
+        f['__callback_id'] = callbackid;
         _sendMessage(JSON.stringify(f));
     }
 

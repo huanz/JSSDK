@@ -48,63 +48,105 @@
         return _sendMessageQueue = [], _setResultValue("SCENE_FETCHQUEUE", b), b
     }
 
-    function _handleMessageFromWeixin(a) {
+    /**
+     * 
+     * @param {object} message 
+     * @param {string} message.__msg_type 消息类型：callback、event
+     * @param {string} [message.__callback_id] callback_id
+     * @param {string} [message.__event_id] 事件名称
+     * @param {object} message.__params   参数
+     * @param {object} [message.__params.fullApiName]
+     */
+    function _handleMessageFromWeixin(message) {
         var b = __WeixinJSBridge._handleMessageFromWeixin;
+        // 防止方法被修改导致出错
         if (b !== _handleMessageIdentifier) return "{}";
-        var c, d;
+
+        var c, msgWrap;
         if ("yes" === _isUseMd5) {
-            var e = a[_JSON_MESSAGE],
-                f = a[_SHA_KEY],
+            var e = message[_JSON_MESSAGE],
+                f = message[_SHA_KEY],
                 g = new Array;
             g[0] = JSON.stringify(e), g[1] = _xxyy;
             var h = g.join(""),
                 i = "",
                 j = CryptoJS.SHA1(h);
             if (i = j.toString(), i !== f) return _log("_handleMessageFromWeixin , shaStr : " + f + " , str : " + h + " , msgSha : " + i), "{}";
-            d = e
-        } else d = a;
-        switch (d[_MESSAGE_TYPE]) {
+            msgWrap = e;
+        } else {
+            msgWrap = message;
+        }
+        switch (msgWrap[_MESSAGE_TYPE]) {
             case "callback":
-                if ("string" == typeof d[_CALLBACK_ID] && "function" == typeof _callback_map[d[_CALLBACK_ID]]) {
-                    var c = _callback_map[d[_CALLBACK_ID]](d.__params);
-                    return delete _callback_map[d[_CALLBACK_ID]], _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(c)), JSON.stringify(c)
+                if ("string" == typeof msgWrap[_CALLBACK_ID] && "function" == typeof _callback_map[msgWrap[_CALLBACK_ID]]) {
+                    var ret = _callback_map[msgWrap[_CALLBACK_ID]](msgWrap.__params);
+                    delete _callback_map[msgWrap[_CALLBACK_ID]];
+
+                    _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(ret));
+                    return JSON.stringify(ret);
                 }
-                return _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify({
+
+                _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify({
                     __err_code: "cb404"
-                })), JSON.stringify({
+                }));
+
+                return JSON.stringify({
                     __err_code: "cb404"
                 });
             case "event":
-                if ("string" == typeof d[_EVENT_ID]) {
-                    if ("function" == typeof _event_hook_map_for3rd[d[_EVENT_ID]] && _isIn3rdApiList(d[_EVENT_ID])) {
+                if ("string" == typeof msgWrap[_EVENT_ID]) {
+                    if ("function" == typeof _event_hook_map_for3rd[msgWrap[_EVENT_ID]] && _isIn3rdApiList(msgWrap[_EVENT_ID])) {
                         var k = ["menu:share:timeline", "menu:share:qq", "menu:share:weiboApp", "menu:share:QZone", "menu:share:appmessage", "menu:share:email", "menu:share:facebook"];
-                        k.indexOf(d[_EVENT_ID]) > -1 && _sendMessage(JSON.stringify({
-                            __handleFromWeixin: _xxyy,
-                            __fullApiName: d.__params.fullApiName
-                        }));
-                        var c = _event_hook_map_for3rd[d[_EVENT_ID]](d.__params);
-                        return _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(c)), JSON.stringify(c)
+                        if (k.indexOf(msgWrap[_EVENT_ID]) > -1) {
+                            _sendMessage(JSON.stringify({
+                                __handleFromWeixin: _xxyy,
+                                __fullApiName: msgWrap.__params.fullApiName
+                            }));
+                        }
+                        var ret = _event_hook_map_for3rd[msgWrap[_EVENT_ID]](msgWrap.__params);
+                        _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(ret));
+                        return JSON.stringify(ret);
                     }
-                    if ("function" == typeof _event_hook_map[d[_EVENT_ID]]) {
-                        var c = _event_hook_map[d[_EVENT_ID]](d.__params);
-                        return _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(c)), JSON.stringify(c)
+                    if ("function" == typeof _event_hook_map[msgWrap[_EVENT_ID]]) {
+                        var ret = _event_hook_map[msgWrap[_EVENT_ID]](msgWrap.__params);
+                        _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify(ret));
+                        return JSON.stringify(ret);
                     }
                 }
-                return _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify({
+
+                _setResultValue("SCENE_HANDLEMSGFROMWX", JSON.stringify({
                     __err_code: "ev404"
-                })), JSON.stringify({
+                }));
+
+                return JSON.stringify({
                     __err_code: "ev404"
-                })
+                });
         }
     }
 
-    function _setResultValue(a, b) {
-        void 0 === b && (b = "dummy"), _setResultQueue.push(a + "&" + base64encode(UTF8.encode(b))), _setResultQueueRunning || _continueSetResult()
+    function _setResultValue(key, params) {
+        if (params === void 0) {
+            params = 'dummy';
+        }
+        _setResultQueue.push(key + "&" + base64encode(UTF8.encode(params)));
+        if (!_setResultQueueRunning) {
+            _continueSetResult();
+        }
     }
 
     function _continueSetResult() {
         var a = _setResultQueue.shift();
-        void 0 === a ? _setResultQueueRunning = !1 : window.WeixinJSBridge._isBridgeByIframe ? (_setResultQueueRunning = !0, _setResultIframe.src = "weixin://private/setresult/" + a) : (_setResultQueueRunning = !0, console.log("weixin://private/setresult/" + a))
+        if (void 0 === a) {
+            _setResultQueueRunning = false;
+        } else {
+            if (window.WeixinJSBridge._isBridgeByIframe) {
+                _setResultQueueRunning = true;
+                _setResultIframe.src = "weixin://private/setresult/" + a;
+            } else {
+                _setResultQueueRunning = true;
+                console.log("weixin://private/setresult/" + a);
+            }
+        }
     }
 
     /**
@@ -432,7 +474,7 @@
             _onfor3rdIdentifier = _onfor3rd,
             _callIdentifier = _call,
             _setResultQueue = [],
-            _setResultQueueRunning = !1,
+            _setResultQueueRunning = false,
             domain_list = [],
             __WeixinJSBridge = {
                 invoke: _call,
@@ -441,16 +483,16 @@
                 env: _env,
                 log: _log,
                 _fetchQueue: _fetchQueue,
-                _hasInit: !1,
-                _hasPreInit: !1,
-                _isBridgeByIframe: !0,
+                _hasInit: false,
+                _hasPreInit: false,
+                _isBridgeByIframe: true,
                 _continueSetResult: _continueSetResult
             };
         try {
             Object.defineProperty(__WeixinJSBridge, "_handleMessageFromWeixin", {
                 value: _handleMessageFromWeixin,
-                writable: !1,
-                configurable: !1
+                writable: false,
+                configurable: false
             })
         } catch (e) {
             return
@@ -458,8 +500,8 @@
         try {
             Object.defineProperty(window, "WeixinJSBridge", {
                 value: __WeixinJSBridge,
-                writable: !1,
-                configurable: !1
+                writable: false,
+                configurable: false
             })
         } catch (e) {
             return
